@@ -68,6 +68,15 @@
         "type": "int",
         "default": 20,
         "hint": "主人发言到这个数才跑完整反思（一次约 80 次采样调用）"
+      },
+      "protected_dirs": {
+        "description": "额外锁死的插件目录",
+        "type": "list",
+        "default": [],
+        "items": {
+          "type": "string"
+        },
+        "hint": "填插件目录名，例如 astrbot_plugin_livingmemory。这些目录下的文件永不被补丁修改 —— 行为地基只许人改，不许模型改。"
       }
     }
   },

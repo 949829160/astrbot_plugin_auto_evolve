@@ -7,7 +7,7 @@ desc: >-
   「改哪一句 / 改成什么 / 为什么改」，落地前先自证（唯一命中、不重复、不越层、
   不删锚点），过了才动，动前备份、动完抽样复验。补丁经你点头才落库，随时可撤。
   用得越久，它越像你要的那个人。
-version: "1.0.0"
+version: "1.0.1"
 author: YG
 repo: "https://github.com/949829160/astrbot_plugin_auto_evolve"
 license: "MIT"

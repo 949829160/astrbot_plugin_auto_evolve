@@ -57,18 +57,17 @@ BACKUP_DIR = SELF_DIR / "backups"
 CFG_JSON = DATA_DIR / "config" / "astrbot_plugin_auto_evolve_config.json"
 LEX_PATH = DATA_DIR / "plugin_data" / "astrbot_plugin_auto_evolve" / "lexicon.json"
 # 这几个目录不许被自己的补丁改：改了等于把校验逻辑交给自己，之后所有限制都是纸的。
-# 出站清洗（vanity）、主动消息节奏（proactive_chat）、记忆（livingmemory）都是
-# 她的行为地基，动一处就能绕过之前所有调试，所以整目录锁死。
-PROTECTED_PREFIXES = (
-    "astrbot_plugin_auto_evolve/",
-    "astrbot_vanity/",
-    "astrbot_plugin_proactive_chat/",
-    "astrbot_plugin_livingmemory/",
-)
+# 默认只锁本插件；其它"行为地基"（出站清洗、主动消息节奏、记忆）由配置
+# 基本设置 -> protected_dirs 追加目录名，别写死在代码里。
+PROTECTED_PREFIXES = ("astrbot_plugin_auto_evolve/",)
+EXTRA_PROTECTED: list[str] = []
 
 
 def _is_protected(p: str) -> bool:
-    return any(p == x.rstrip("/") or p.startswith(x) for x in PROTECTED_PREFIXES)
+    for x in list(PROTECTED_PREFIXES) + EXTRA_PROTECTED:
+        if p == x.rstrip("/") or p.startswith(x):
+            return True
+    return False
 
 
 # 2026-11-07 扩范围：绿区 = data/plugins，黄区 = 影响她说话方式的三处 core，
@@ -914,6 +913,11 @@ class SelfReflect(Star):
         self.conf = config if config is not None else {}
         self._task: asyncio.Task | None = None
         self._state = self._load_state()
+        try:
+            extra = self._c("基本设置", "protected_dirs", []) or []
+            EXTRA_PROTECTED[:] = [str(x).strip().rstrip("/") + "/" for x in extra if str(x).strip()]
+        except Exception:  # noqa: BLE001
+            EXTRA_PROTECTED[:] = []
 
     # ---------------- 配置
 
