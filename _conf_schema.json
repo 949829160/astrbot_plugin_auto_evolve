@@ -1,0 +1,371 @@
+{
+  "基本设置": {
+    "description": "基本设置",
+    "type": "object",
+    "hint": "定时反思的总开关和执行时间",
+    "items": {
+      "enabled": {
+        "description": "启用定时反思",
+        "type": "bool",
+        "default": true,
+        "hint": "关掉之后只能用 /反思 手动触发"
+      },
+      "schedule_times": {
+        "description": "执行时间（24小时制 HH:MM，可写多个）",
+        "type": "list",
+        "items": {
+          "type": "string"
+        },
+        "default": [
+          "04:00"
+        ],
+        "hint": "例：04:00 和 15:30，到点只跑一次，同一天同一时间不会重复触发"
+      },
+      "target_umo": {
+        "description": "复盘哪个会话 / 结果发到哪（unified_msg_origin，例如 napcat:FriendMessage:123456）；留空 = 用最后一次触发指令的会话",
+        "type": "string",
+        "default": "",
+        "hint": "格式 平台:消息类型:会话ID，实际就复盘这条会话的对话"
+      },
+      "lookback_turns": {
+        "description": "每次最多回看多少轮",
+        "type": "int",
+        "default": 80,
+        "hint": "一轮=你说一句我回一次。超过就只取最近的"
+      },
+      "first_run_turns": {
+        "description": "第一次运行回看多少轮",
+        "type": "int",
+        "default": 40,
+        "hint": "没有历史记录时用它兜底"
+      },
+      "max_input_chars": {
+        "description": "喂给模型的对话字数上限",
+        "type": "int",
+        "default": 40000,
+        "hint": "超了从头截掉，防止一次塞十万字"
+      },
+      "min_new_turns": {
+        "description": "至少攒够多少条新消息才复盘",
+        "type": "int",
+        "default": 20,
+        "hint": "太少会拿三五句话改人格，改出来的是噪音"
+      },
+      "min_gap_hours": {
+        "description": "两次自动复盘最少隔几小时",
+        "type": "float",
+        "default": 12.0,
+        "hint": "手动 /反思 不受这条限制"
+      },
+      "tier1_turns": {
+        "description": "轻量记账门槛（轮）",
+        "type": "int",
+        "default": 8,
+        "hint": "够这个数但没到上面那个数，只记一笔统计，不跑模型"
+      },
+      "tier2_turns": {
+        "description": "完整复盘门槛（轮）",
+        "type": "int",
+        "default": 20,
+        "hint": "主人发言到这个数才跑完整反思（一次约 80 次采样调用）"
+      }
+    }
+  },
+  "人格改法": {
+    "description": "人格改法",
+    "type": "object",
+    "hint": "允许加减，靠百分比卡幅度",
+    "items": {
+      "persona_id": {
+        "description": "要改的人格 ID",
+        "type": "string",
+        "default": "default"
+      },
+      "delta_percent": {
+        "description": "字数增减幅度上限（%）",
+        "type": "float",
+        "default": 8.0,
+        "hint": "正负都算。8 就是最多加 8% 或减 8%，超了这次就不落地"
+      },
+      "enforce_delta": {
+        "description": "严格卡幅度",
+        "type": "bool",
+        "default": true,
+        "hint": "关掉只警告不拦"
+      },
+      "auto_apply_persona": {
+        "description": "人格补丁直接落地",
+        "type": "bool",
+        "default": false,
+        "hint": "关着就发给你审核，回 /看 看 diff，/批 才动"
+      },
+      "max_total_drift_percent": {
+        "description": "累计漂移上限（%）",
+        "type": "float",
+        "default": 15.0,
+        "hint": "相对第一次见到的人格。单次合规不代表整体没跑偏，超了强制转人工"
+      },
+      "mask_input": {
+        "description": "把对话里的隐私片段打码再喂给模型",
+        "type": "bool",
+        "default": false,
+        "hint": "开着她就看不见你到底用了哪些词，只能靠附带的用词成绩单判断"
+      },
+      "max_persona_patches": {
+        "description": "单次最多改几处",
+        "type": "int",
+        "default": 4
+      },
+      "dry_run": {
+        "description": "只分析不改",
+        "type": "bool",
+        "default": false,
+        "hint": "打开后只发报告，人格和代码都不动"
+      },
+      "persona_per_round": {
+        "description": "一轮最多落几条人格补丁",
+        "type": "int",
+        "default": 2,
+        "hint": "提四条落两条的时候回执会说四件，主人没法判断批了什么。超出上限的自动转下一轮"
+      },
+      "gate_enabled": {
+        "description": "先判值不值得复盘",
+        "type": "bool",
+        "default": true,
+        "hint": "按主人说了多长、多少轮、占多少字、问了几句算信息量，太薄就跳过不跑模型"
+      },
+      "gate_threshold": {
+        "description": "信息量门槛",
+        "type": "float",
+        "default": 0.35,
+        "hint": "低于它就跳过。0.35 约等于「主人每次说十个字以上、聊满二十轮」"
+      },
+      "min_confidence": {
+        "description": "补丁置信度门槛",
+        "type": "float",
+        "default": 0.7,
+        "hint": "模型自己标低于这个数的补丁不落地，只在回执里提一句"
+      }
+    }
+  },
+  "代码补丁": {
+    "description": "代码补丁",
+    "type": "object",
+    "hint": "一律先发给你审核",
+    "items": {
+      "code_patch_enabled": {
+        "description": "允许产出代码补丁",
+        "type": "bool",
+        "default": true
+      },
+      "allowed_dirs": {
+        "description": "允许改的目录（相对 data/plugins）",
+        "type": "list",
+        "items": {
+          "type": "string"
+        },
+        "default": [
+          "astrbot_auto_draw",
+          "meme_manager",
+          "astrbot_plugin_xiaoyu_toolkit"
+        ],
+        "hint": "留空等于可以改整个 data/plugins 下的所有插件。填了就只改列出的目录（逗号分隔）。"
+      },
+      "auto_apply_code": {
+        "description": "代码补丁直接落地",
+        "type": "bool",
+        "default": false,
+        "hint": "关着只进待审队列。开着也是先备份、改完编译、失败自动滚回"
+      },
+      "max_code_patches": {
+        "description": "单次最多提几个",
+        "type": "int",
+        "default": 2
+      },
+      "auto_reload": {
+        "description": "批准后自动重载插件",
+        "type": "bool",
+        "default": false
+      },
+      "import_check": {
+        "description": "落代码补丁后试 import 一次",
+        "type": "bool",
+        "default": true,
+        "hint": "语法过了不等于能加载：模块级拼错名字、循环 import 都要等 import 才炸。缺运行环境的报错不回滚"
+      }
+    }
+  },
+  "提示词": {
+    "description": "提示词",
+    "type": "object",
+    "hint": "改这行就能换复盘的角度，变量用花括号",
+    "items": {
+      "reflection_prompt": {
+        "description": "反思提示词",
+        "type": "text",
+        "default": "",
+        "hint": "留空用插件内置的。可用变量：{delta_percent} {persona} {conversation} {last_reflection} {persona_chars} {turn_count}",
+        "obvious_hint": true
+      },
+      "provider_id": {
+        "description": "指定用哪个模型",
+        "type": "string",
+        "default": "openai/deepseek-v4.1-flash",
+        "options": [
+          "openai/deepseek-v4.1-flash",
+          "openai_1/agnes-2.5-flash",
+          "agens/agnes-3.0-flash",
+          "workbuddy/deepseek-v4.1-flash",
+          "workbuddy/minimax-m3.1-flash",
+          "workbuddy/hy4-preview-f",
+          "deepseek/deepseek-flash"
+        ],
+        "hint": "从下拉里选；新加了 provider 就手动往 _conf_schema.json 里补一行"
+      },
+      "notify_prefix": {
+        "description": "报告开头的标记",
+        "type": "string",
+        "default": "反思完了"
+      },
+      "obs_window": {
+        "description": "画像回看几轮反思",
+        "type": "int",
+        "default": 12,
+        "hint": "把最近几轮反复被指出的问题写进提示词开头；太小会漏，太大会把老问题当成本轮任务"
+      }
+    }
+  },
+  "验证": {
+    "description": "改动前体检",
+    "type": "object",
+    "hint": "两道关：先查人格文本（确定性，算拦截依据），再跑采样（只做参考）。采样随机性比人格改动还大，拿它当判据会瞎拦。",
+    "items": {
+      "enabled": {
+        "description": "启用验证",
+        "type": "bool",
+        "default": true,
+        "hint": "关掉就退回「改完直接上线」，不建议"
+      },
+      "prompt_ids": {
+        "description": "每轮跑哪几条（VERIFY_PROMPTS 的下标，0 基）",
+        "type": "list",
+        "items": {
+          "type": "int"
+        },
+        "default": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          25,
+          26,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          27,
+          28,
+          12,
+          13,
+          14,
+          15
+        ],
+        "hint": "分层固定集：日常 8 / 工作 4 / 情绪 8 / 口语 4 / 主动 5。别随机抽 —— 抽的不是同一批，两轮没法比。工作组另看两条：首句是不是结论、正文里有没有工具调用 JSON。"
+      },
+      "provider_id": {
+        "description": "用哪个模型采样",
+        "type": "string",
+        "default": "openai/deepseek-v4.1-flash",
+        "hint": "别用聊天那个 provider：它带 temperature 1.15 和 presence_penalty 0.4，采样会抖得没法比。"
+      },
+      "repeat": {
+        "description": "每条采样跑几遍",
+        "type": "int",
+        "default": 2,
+        "hint": "同一条跑几遍取中位。单遍方差能压过人格差异，1 遍等于没验"
+      },
+      "groups": {
+        "description": "分组（只读）",
+        "type": "text",
+        "default": "日常 8 / 工作 4 / 情绪 8 / 口语 4 / 主动 5",
+        "hint": "分层固定集：日常 8 / 工作 4 / 情绪 8 / 口语 4 / 主动 5。别随机抽 —— 抽的不是同一批，两轮没法比。工作组另看两条：首句是不是结论、正文里有没有工具调用 JSON。"
+      },
+      "struct_check": {
+        "description": "采样时比结构（句尾复用、收尾种类）",
+        "type": "bool",
+        "default": true,
+        "hint": "覆盖率和密度看不出模板堆在一处，只有句尾会重复。纯统计，不额外调模型"
+      }
+    }
+  },
+  "提示词演化": {
+    "description": "提示词演化",
+    "type": "object",
+    "hint": "每次复盘跑完，把主人最近反复在意的点补进反思提示词",
+    "items": {
+      "enabled": {
+        "description": "跑完自动补",
+        "type": "bool",
+        "default": true
+      },
+      "min_hits": {
+        "description": "同一条侧重撞上几次才写进去",
+        "type": "int",
+        "default": 2,
+        "hint": "1 等于立刻写，2 等于连着两轮都提到才写"
+      },
+      "max_focus": {
+        "description": "侧重段最多几条",
+        "type": "int",
+        "default": 8
+      },
+      "max_chars": {
+        "description": "侧重段总字数上限",
+        "type": "int",
+        "default": 420
+      },
+      "decay_days": {
+        "description": "条目寿命（天）",
+        "type": "float",
+        "default": 30.0,
+        "hint": "超过这么多天没再撞上的侧重减一票，减到 0 就删，防止提示词只涨不消"
+      },
+      "match_ratio": {
+        "description": "两条侧重多像算同一条",
+        "type": "float",
+        "default": 0.35,
+        "hint": "0.6 太严：换个说法就当成新条目，提示词越攒越长；0.35 起步，串味了再往上调"
+      }
+    }
+  },
+  "备份": {
+    "description": "备份",
+    "type": "object",
+    "hint": "人格每次落地都留快照。按天留，超期自动删 —— 222 个文件的时候没人找得到最新的那个。",
+    "items": {
+      "keep_days": {
+        "description": "留几天",
+        "type": "int",
+        "default": 7,
+        "hint": "按天去重，每天只留最新一份"
+      }
+    }
+  },
+  "词表": {
+    "description": "词表",
+    "type": "object",
+    "hint": "用词偏好是数据不是代码。补丁标 lexicon 层就落这个文件，别去改插件的 main.py。",
+    "items": {
+      "lexicon_path": {
+        "description": "词表 JSON 路径；留空 = <数据目录>/plugin_data/astrbot_plugin_auto_evolve/lexicon.json",
+        "type": "string",
+        "default": "",
+        "hint": "用词偏好是数据不是代码。补丁标 lexicon 层就落这个文件，别去改插件的 main.py。"
+      }
+    }
+  }
+}
