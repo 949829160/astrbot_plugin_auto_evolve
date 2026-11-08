@@ -9,7 +9,7 @@ desc: >-
   用得越久，它越像你要的那个人。
 version: "1.0.0"
 author: YG
-repo: ""
+repo: "https://github.com/949829160/astrbot_plugin_auto_evolve"
 license: "MIT"
 astrbot_version: ">=4.11.4"
 support_platforms:
